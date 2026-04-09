@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Stock Advisor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --accent: #00ff88;
+      --accent2: #ff6b35;
+      --text: #e8e8f0;
+      --muted: #6b6b8a;
+      --bullish: #00ff88;
+      --bearish: #ff4444;
+      --neutral: #ffcc00;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 1.2rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      background: rgba(10,10,15,0.95);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+    }
+
+    .logo {
+      font-size: 1.3rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .logo span { color: var(--accent); }
+
+    .badge {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      background: rgba(0,255,136,0.1);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 0.3rem 0.7rem;
+      border-radius: 4px;
+      letter-spacing: 1px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .add-form {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      flex: 1;
+      min-width: 180px;
+    }
+
+    label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-family: 'Space Mono', monospace;
+    }
+
+    input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: var(--accent); }
+    input::placeholder { color: var(--muted); }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+    }
+    .btn-primary:hover { background: #00cc6a; transform: translateY(-1px); }
+
+    .btn-danger {
+      background: transparent;
+      border: 1px solid var(--bearish);
+      color: var(--bearish);
+      padding: 0.4rem 0.8rem;
+      font-size: 0.8rem;
+    }
+    .btn-danger:hover { background: rgba(255,68,68,0.1); }
+
+    .btn-analyze {
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 0.4rem 0.8rem;
+      font-size: 0.8rem;
+    }
+    .btn-analyze:hover { background: rgba(0,255,136,0.1); }
+
+    .section-title {
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-family: 'Space Mono', monospace;
+      margin-bottom: 1rem;
+    }
+
+    .watchlist-grid {
+      display: grid;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stock-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.2rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+      transition: border-color 0.2s;
+    }
+    .stock-card:hover { border-color: #2e2e4e; }
+
+    .stock-symbol {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .stock-actions { display: flex; gap: 0.5rem; }
+
+    /* Analysis Result Panel */
+    #result-panel {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-top: 2rem;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .result-symbol {
+      font-size: 2rem;
+      font-weight: 800;
+    }
+
+    .sentiment-badge {
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .bullish { background: rgba(0,255,136,0.15); color: var(--bullish); border: 1px solid var(--bullish); }
+    .bearish { background: rgba(255,68,68,0.15); color: var(--bearish); border: 1px solid var(--bearish); }
+    .neutral  { background: rgba(255,204,0,0.15); color: var(--neutral);  border: 1px solid var(--neutral); }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .metric {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .metric-label {
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-family: 'Space Mono', monospace;
+      margin-bottom: 0.4rem;
+    }
+
+    .metric-value {
+      font-family: 'Space Mono', monospace;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .ai-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .ai-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .ai-card-label {
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-family: 'Space Mono', monospace;
+      margin-bottom: 0.5rem;
+    }
+
+    .ai-card-value {
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .recommendation-tag {
+      display: inline-block;
+      padding: 0.3rem 0.8rem;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 1px;
+    }
+
+    .rec-buy  { background: rgba(0,255,136,0.2); color: var(--bullish); }
+    .rec-sell { background: rgba(255,68,68,0.2); color: var(--bearish); }
+    .rec-hold { background: rgba(255,204,0,0.2); color: var(--neutral); }
+
+    .chart-container {
+      position: relative;
+      height: 180px;
+      margin-top: 1rem;
+    }
+
+    #loading {
+      display: none;
+      text-align: center;
+      padding: 2rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.85rem;
+    }
+
+    .spinner {
+      width: 28px;
+      height: 28px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.85rem;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+    }
+
+    .timestamp {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">AI <span>Stock</span> Advisor</div>
+  <div class="badge">POWERED BY GROQ LLM</div>
+</header>
+
+<main>
+  <!-- Add Stock Form -->
+  <div class="add-form">
+    <div class="form-group">
+      <label>Stock Symbol</label>
+      <input id="stockInput" type="text" placeholder="e.g. TCS.NS, RELIANCE.NS, AAPL" />
+    </div>
+    <div class="form-group">
+      <label>Email for Alerts (optional)</label>
+      <input id="emailInput" type="email" placeholder="you@example.com" />
+    </div>
+    <button class="btn btn-primary" onclick="addStock()">+ Add to Watchlist</button>
+  </div>
+
+  <!-- Watchlist -->
+  <div class="section-title">Watchlist</div>
+  <div class="watchlist-grid" id="watchlistGrid">
+    <div class="empty-state">No stocks yet. Add one above ↑</div>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="spinner"></div>
+    Fetching real-time data & running AI analysis...
+  </div>
+
+  <!-- Result Panel -->
+  <div id="result-panel">
+    <div class="result-header">
+      <div>
+        <div class="section-title">AI Analysis</div>
+        <div class="result-symbol" id="res-symbol">—</div>
+        <div id="res-name" style="color:var(--muted); font-size:0.85rem; margin-top:0.2rem;"></div>
+      </div>
+      <div id="res-sentiment-badge" class="sentiment-badge neutral">—</div>
+    </div>
+
+    <div class="section-title">Live Stock Metrics</div>
+    <div class="metrics-grid">
+      <div class="metric"><div class="metric-label">Current Price</div><div class="metric-value" id="m-price">—</div></div>
+      <div class="metric"><div class="metric-label">Prev Close</div><div class="metric-value" id="m-prev">—</div></div>
+      <div class="metric"><div class="metric-label">Day High</div><div class="metric-value" id="m-high">—</div></div>
+      <div class="metric"><div class="metric-label">Day Low</div><div class="metric-value" id="m-low">—</div></div>
+      <div class="metric"><div class="metric-label">Volume</div><div class="metric-value" id="m-vol">—</div></div>
+      <div class="metric"><div class="metric-label">P/E Ratio</div><div class="metric-value" id="m-pe">—</div></div>
+    </div>
+
+    <div class="section-title">AI Recommendations</div>
+    <div class="ai-cards">
+      <div class="ai-card">
+        <div class="ai-card-label">Recommendation</div>
+        <div class="ai-card-value"><span id="res-rec" class="recommendation-tag">—</span></div>
+      </div>
+      <div class="ai-card">
+        <div class="ai-card-label">Entry Point</div>
+        <div class="ai-card-value" id="res-entry">—</div>
+      </div>
+      <div class="ai-card" style="grid-column: span 2;">
+        <div class="ai-card-label">Reasoning</div>
+        <div class="ai-card-value" id="res-reason">—</div>
+      </div>
+      <div class="ai-card" style="grid-column: span 2;">
+        <div class="ai-card-label">⚠ Risks</div>
+        <div class="ai-card-value" id="res-risks">—</div>
+      </div>
+    </div>
+
+    <div class="section-title">5-Day Price Trend</div>
+    <div class="chart-container">
+      <canvas id="priceChart"></canvas>
+    </div>
+
+    <div class="timestamp" id="res-time"></div>
+  </div>
+</main>
+
+<script>
+let watchlist = [];
+let chartInstance = null;
+
+async function loadWatchlist() {
+  const res = await fetch('/api/watchlist');
+  watchlist = await res.json();
+  renderWatchlist();
+}
+
+function renderWatchlist() {
+  const grid = document.getElementById('watchlistGrid');
+  if (watchlist.length === 0) {
+    grid.innerHTML = '<div class="empty-state">No stocks yet. Add one above ↑</div>';
+    return;
+  }
+  grid.innerHTML = watchlist.map(s => `
+    <div class="stock-card">
+      <div class="stock-symbol">${s.symbol}</div>
+      <div style="color:var(--muted); font-size:0.8rem; font-family:'Space Mono',monospace;">${s.email || 'No email'}</div>
+      <div class="stock-actions">
+        <button class="btn btn-analyze" onclick="analyze('${s.symbol}')">Analyze →</button>
+        <button class="btn btn-danger" onclick="removeStock('${s.symbol}')">Remove</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function addStock() {
+  const symbol = document.getElementById('stockInput').value.trim().toUpperCase();
+  const email = document.getElementById('emailInput').value.trim();
+  if (!symbol) return alert('Enter a stock symbol!');
+  await fetch('/api/watchlist', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ symbol, email })
+  });
+  document.getElementById('stockInput').value = '';
+  document.getElementById('emailInput').value = '';
+  await loadWatchlist();
+}
+
+async function removeStock(symbol) {
+  await fetch(`/api/watchlist/${symbol}`, { method: 'DELETE' });
+  await loadWatchlist();
+}
+
+async function analyze(symbol) {
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('result-panel').style.display = 'none';
+
+  try {
+    const res = await fetch(`/api/analyze/${symbol}`);
+    const data = await res.json();
+
+    if (data.error) { alert('Error: ' + data.error); return; }
+
+    const s = data.stock;
+    const a = data.analysis;
+
+    document.getElementById('res-symbol').textContent = symbol;
+    document.getElementById('res-name').textContent = s.name || '';
+
+    const sentiment = (a.sentiment || 'Neutral').toLowerCase();
+    const badge = document.getElementById('res-sentiment-badge');
+    badge.textContent = a.sentiment;
+    badge.className = 'sentiment-badge ' + sentiment;
+
+    document.getElementById('m-price').textContent = formatNum(s.current_price);
+    document.getElementById('m-prev').textContent = formatNum(s.previous_close);
+    document.getElementById('m-high').textContent = formatNum(s.day_high);
+    document.getElementById('m-low').textContent = formatNum(s.day_low);
+    document.getElementById('m-vol').textContent = formatVol(s.volume);
+    document.getElementById('m-pe').textContent = s.pe_ratio || 'N/A';
+
+    const rec = a.recommendation || 'Hold';
+    const recEl = document.getElementById('res-rec');
+    recEl.textContent = rec;
+    recEl.className = 'recommendation-tag rec-' + rec.toLowerCase();
+
+    document.getElementById('res-entry').textContent = a.entry_point || '—';
+    document.getElementById('res-reason').textContent = a.reason || '—';
+    document.getElementById('res-risks').textContent = a.risks || '—';
+    document.getElementById('res-time').textContent = 'Last updated: ' + new Date().toLocaleString();
+
+    // Chart
+    const ph = s.price_history;
+    if (ph && ph.prices && ph.prices.length > 0) {
+      if (chartInstance) chartInstance.destroy();
+      const ctx = document.getElementById('priceChart').getContext('2d');
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: ph.dates,
+          datasets: [{
+            label: symbol,
+            data: ph.prices,
+            borderColor: sentiment === 'bullish' ? '#00ff88' : sentiment === 'bearish' ? '#ff4444' : '#ffcc00',
+            backgroundColor: sentiment === 'bullish' ? 'rgba(0,255,136,0.1)' : sentiment === 'bearish' ? 'rgba(255,68,68,0.1)' : 'rgba(255,204,0,0.1)',
+            tension: 0.4,
+            fill: true,
+            pointRadius: 4,
+            pointBackgroundColor: '#0a0a0f'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#6b6b8a', font: { family: 'Space Mono', size: 10 } }, grid: { color: '#1e1e2e' } },
+            y: { ticks: { color: '#6b6b8a', font: { family: 'Space Mono', size: 10 } }, grid: { color: '#1e1e2e' } }
+          }
+        }
+      });
+    }
+
+    document.getElementById('result-panel').style.display = 'block';
+  } catch(e) {
+    alert('Request failed: ' + e.message);
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+  }
+}
+
+function formatNum(n) {
+  if (!n) return '—';
+  return '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+}
+
+function formatVol(v) {
+  if (!v) return '—';
+  if (v >= 1e7) return (v / 1e7).toFixed(2) + ' Cr';
+  if (v >= 1e5) return (v / 1e5).toFixed(2) + ' L';
+  return v.toLocaleString();
+}
+
+// Allow Enter key in inputs
+document.addEventListener('DOMContentLoaded', () => {
+  loadWatchlist();
+  document.getElementById('stockInput').addEventListener('keydown', e => { if (e.key === 'Enter') addStock(); });
+});
+</script>
+</body>
+</html>
